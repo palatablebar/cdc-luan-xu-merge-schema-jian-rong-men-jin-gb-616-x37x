@@ -1,0 +1,43 @@
+/* 设计令牌 · 视觉方向「机房夜班信号台」
+   暗墨绿机身 + 琥珀信号灯 + 骨白读数，所有颜色用 oklch；双字体：
+   display = Bricolage Grotesque（工业感标题），body = Noto Sans SC（中文正文），
+   读数与 LSN 用 JetBrains Mono。禁止纯黑纯白、紫蓝渐变、玻璃拟态。 */
+:root {
+  --paper: oklch(0.215 0.016 205);
+  --paper-2: oklch(0.255 0.018 205);
+  --paper-3: oklch(0.3 0.02 203);
+  --ink: oklch(0.93 0.012 95);
+  --ink-soft: oklch(0.78 0.014 100);
+  --ink-faint: oklch(0.63 0.015 105);
+  --rule: oklch(0.33 0.018 202);
+  --rule-strong: oklch(0.45 0.022 200);
+
+  --accent: oklch(0.79 0.146 76);
+  --accent-soft: oklch(0.68 0.125 72);
+  --accent-wash: oklch(0.32 0.05 76);
+  --ok: oklch(0.74 0.1 168);
+  --ok-wash: oklch(0.3 0.045 168);
+  --warn: oklch(0.8 0.12 92);
+  --warn-wash: oklch(0.33 0.05 92);
+  --danger: oklch(0.68 0.17 25);
+  --danger-wash: oklch(0.31 0.06 25);
+  --info: oklch(0.72 0.07 235);
+  --info-wash: oklch(0.3 0.04 235);
+
+  --font-display: 'Bricolage Grotesque', 'Noto Sans SC', 'PingFang SC', sans-serif;
+  --font-body: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  --fs-xs: 0.72rem;
+  --fs-sm: 0.82rem;
+  --fs-md: 0.94rem;
+  --fs-lg: 1.18rem;
+  --fs-xl: clamp(1.5rem, 2.2vw, 2.2rem);
+  --fs-2xl: clamp(2rem, 3.4vw, 3.2rem);
+
+  --pad: clamp(14px, 1.6vw, 28px);
+  --rail: 236px;
+  --radius: 3px;
+  --shadow: 0 1px 0 oklch(0.3 0.02 200), 0 24px 48px -42px oklch(0.05 0.02 200 / 0.9);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}

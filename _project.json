@@ -1,0 +1,10 @@
+{
+  "id": "gb-616",
+  "org": "衡远保险 · 数据集成组",
+  "short": "cdcmerge",
+  "title": "CDC 乱序合并与 Schema 兼容门禁",
+  "db": "mysql",
+  "fe": 18205,
+  "be": 19205,
+  "dbp": 17705
+}
