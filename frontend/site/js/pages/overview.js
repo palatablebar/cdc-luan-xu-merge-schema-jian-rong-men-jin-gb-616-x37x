@@ -61,6 +61,10 @@ export const overviewPage = {
               <span class="k">Schema 门禁</span><b>${esc(data.gate_total)}</b>
               <span class="hint">breaking ${esc(data.gate_breaking)} · 待复核 ${esc(data.gate_pending)}</span>
             </div>
+            <a class="hero-stat ${data.link_pending ? 'alert' : ''}" href="#/link" style="text-decoration:none">
+              <span class="k">跨表关联门禁</span><b>${esc(data.link_pending)}</b>
+              <span class="hint">待关联未发布 · 放行 ${esc(data.link_released)} · 宽表 ${esc(data.wide_published)} / 撤回 ${esc(data.wide_withdrawn)}</span>
+            </a>
           </div>
         </section>
 

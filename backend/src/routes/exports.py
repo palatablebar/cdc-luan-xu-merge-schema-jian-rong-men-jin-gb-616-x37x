@@ -38,3 +38,23 @@ def schema_changes_csv(
     principal: dict = Depends(require_roles(*EXPORT_ROLES)),
 ):
     return export_controller.schema_changes_csv(db, table_id, principal, request)
+
+
+@router.get("/link-rows.csv")
+def link_rows_csv(
+    request: Request,
+    status: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    principal: dict = Depends(require_roles(*EXPORT_ROLES)),
+):
+    return export_controller.link_rows_csv(db, status, principal, request)
+
+
+@router.get("/wide-rows.csv")
+def wide_rows_csv(
+    request: Request,
+    status: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    principal: dict = Depends(require_roles(*EXPORT_ROLES)),
+):
+    return export_controller.wide_rows_csv(db, status, principal, request)

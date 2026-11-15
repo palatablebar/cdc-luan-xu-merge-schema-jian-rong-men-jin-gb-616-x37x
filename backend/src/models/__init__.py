@@ -13,5 +13,18 @@ from src.models.cdc_event import CdcEvent  # noqa: E402
 from src.models.merge_run import MergeRun  # noqa: E402
 from src.models.reject_row import RejectRow  # noqa: E402
 from src.models.schema_change import SchemaChange  # noqa: E402
+from src.models.pending_link import PendingLink  # noqa: E402
+from src.models.wide_row import WideRow  # noqa: E402
 
-__all__ = ["Base", "User", "AuditLog", "SourceTable", "CdcEvent", "MergeRun", "RejectRow", "SchemaChange"]
+__all__ = [
+    "Base",
+    "User",
+    "AuditLog",
+    "SourceTable",
+    "CdcEvent",
+    "MergeRun",
+    "RejectRow",
+    "SchemaChange",
+    "PendingLink",
+    "WideRow",
+]

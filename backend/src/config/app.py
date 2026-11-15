@@ -18,11 +18,49 @@ from src.routes import api_router
 logger = logging.getLogger(f"{settings.app_name}.app")
 
 
+# 增量列：老库（create_all 不会 ALTER 已存在表）补齐关联门禁所需列，幂等。
+_ADDITIVE_COLUMNS = {
+    "source_tables": [
+        ("parent_table_code", "VARCHAR(40) NULL"),
+        ("parent_key_column", "VARCHAR(60) NULL"),
+        ("parent_status_column", "VARCHAR(60) NULL DEFAULT 'status'"),
+        ("void_statuses", "JSON NULL"),
+    ],
+    "merge_runs": [
+        ("link_pending_count", "INT NOT NULL DEFAULT 0"),
+        ("link_released_count", "INT NOT NULL DEFAULT 0"),
+        ("link_withdrawn_count", "INT NOT NULL DEFAULT 0"),
+        ("wide_published_count", "INT NOT NULL DEFAULT 0"),
+        ("wide_withdrawn_count", "INT NOT NULL DEFAULT 0"),
+    ],
+}
+
+
+def _ensure_additive_columns() -> None:
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        for table_name, columns in _ADDITIVE_COLUMNS.items():
+            if table_name not in existing_tables:
+                continue
+            current = {col["name"] for col in inspector.get_columns(table_name)}
+            for column_name, ddl in columns:
+                if column_name in current:
+                    continue
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {ddl}"))
+
+
 def _bootstrap_database() -> None:
     from src.models import Base  # noqa: WPS433 - 延迟导入避免循环
 
     wait_for_db()
     Base.metadata.create_all(bind=engine)
+    try:
+        _ensure_additive_columns()
+    except Exception as exc:  # noqa: BLE001 - 兼容老库，失败不阻塞启动
+        logger.warning("[BOOTSTRAP] additive columns failed (ignored): %s", exc)
 
 
 def _run_seed_once() -> None:

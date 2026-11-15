@@ -22,6 +22,7 @@ export const NAV = [
   { to: '#/events', no: '03', label: '事件流', permission: 'event:read' },
   { to: '#/runs', no: '04', label: '合并批次', permission: 'run:read' },
   { to: '#/schema', no: '05', label: 'Schema 门禁', permission: 'schema:read' },
+  { to: '#/link', no: '06', label: '关联门禁', permission: 'link:read' },
 ];
 
 export const ROLE_LABELS = {
@@ -40,13 +41,13 @@ export const PERMISSIONS = {
   admin: [
     'overview:read', 'table:read', 'table:write', 'event:read', 'event:ingest',
     'run:read', 'run:create', 'reject:read', 'reject:replay',
-    'schema:read', 'schema:gate', 'export:read', 'audit:read',
+    'schema:read', 'schema:gate', 'link:read', 'link:recompute', 'export:read', 'audit:read',
   ],
   analyst: [
     'overview:read', 'table:read', 'event:read', 'run:read',
-    'reject:read', 'reject:replay', 'schema:read', 'export:read',
+    'reject:read', 'reject:replay', 'schema:read', 'link:read', 'link:recompute', 'export:read',
   ],
-  viewer: ['overview:read', 'table:read', 'event:read', 'run:read', 'reject:read', 'schema:read'],
+  viewer: ['overview:read', 'table:read', 'event:read', 'run:read', 'reject:read', 'schema:read', 'link:read'],
 };
 
 export const ENUMS = {
@@ -68,6 +69,15 @@ export const ENUMS = {
     missing_pk: '缺少主键',
   },
   replay: { pending: '待处理', replayed: '已重放', skipped: '已跳过' },
+  // 共享枚举 6：跨表关联门禁
+  linkStatus: { pending: '待关联（未发布）', released: '已放行（已发布）', withdrawn: '已撤回（父单作废）' },
+  linkReason: {
+    parent_missing: '父单未到达',
+    parent_void: '父单已作废',
+    parent_linked: '父单有效，可关联',
+    child_deleted: '从表已删除',
+  },
+  wideStatus: { published: '已发布', withdrawn: '已撤回' },
   eventStatus: { applied: '已应用', late: '迟到', rejected: '被拒' },
   changeKind: {
     add_column: '新增可空列',
@@ -101,6 +111,14 @@ export function reasonTone(reason) {
 
 export function replayTone(status) {
   return { pending: 'warn', replayed: 'ok', skipped: 'info' }[status] || 'info';
+}
+
+export function linkTone(status) {
+  return { pending: 'warn', released: 'ok', withdrawn: 'danger' }[status] || 'info';
+}
+
+export function wideTone(status) {
+  return { published: 'ok', withdrawn: 'danger' }[status] || 'info';
 }
 
 export function severityLabel(severity) {

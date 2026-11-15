@@ -39,3 +39,11 @@ def schema_changes_csv(db: Session, table_id: int | None, principal: dict, reque
     return _respond(
         db, export_service.schema_changes_csv(db, table_id), "schema-changes.csv", "export.schema_changes", principal, request
     )
+
+
+def link_rows_csv(db: Session, status: str | None, principal: dict, request: Request) -> Response:
+    return _respond(db, export_service.link_rows_csv(db, status), "link-rows.csv", "export.link_rows", principal, request)
+
+
+def wide_rows_csv(db: Session, status: str | None, principal: dict, request: Request) -> Response:
+    return _respond(db, export_service.wide_rows_csv(db, status), "wide-rows.csv", "export.wide_rows", principal, request)

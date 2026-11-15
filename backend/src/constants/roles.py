@@ -25,17 +25,18 @@ PERMISSIONS: dict[str, set[str]] = {
         "run:read", "run:create",
         "reject:read", "reject:replay",
         "schema:read", "schema:gate",
+        "link:read", "link:recompute",
         "export:read", "audit:read", "overview:read",
     },
     Role.ANALYST.value: {
         "table:read", "event:read",
         "run:read",
         "reject:read", "reject:replay",
-        "schema:read",
+        "schema:read", "link:read",
         "export:read", "overview:read",
     },
     Role.VIEWER.value: {
-        "table:read", "event:read", "run:read", "reject:read", "schema:read", "overview:read",
+        "table:read", "event:read", "run:read", "reject:read", "schema:read", "link:read", "overview:read",
     },
 }
 
@@ -44,6 +45,7 @@ EVENT_INGEST_ROLES = (Role.ADMIN.value,)
 RUN_CREATE_ROLES = (Role.ADMIN.value,)
 REPLAY_ROLES = (Role.ADMIN.value, Role.ANALYST.value)
 GATE_ROLES = (Role.ADMIN.value,)
+LINK_RECOMPUTE_ROLES = (Role.ADMIN.value, Role.ANALYST.value)
 EXPORT_ROLES = (Role.ADMIN.value, Role.ANALYST.value)
 AUDIT_ROLES = (Role.ADMIN.value,)
 READ_ROLES = (Role.ADMIN.value, Role.ANALYST.value, Role.VIEWER.value)

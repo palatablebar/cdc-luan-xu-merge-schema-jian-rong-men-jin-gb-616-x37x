@@ -69,8 +69,19 @@ def ensure_tables(db) -> int:
                 owner=ORG,
                 note=spec["note"],
                 enabled=True,
+                parent_table_code=spec.get("parent_table_code"),
+                parent_key_column=spec.get("parent_key_column"),
+                parent_status_column=spec.get("parent_status_column") or "status",
+                void_statuses=spec.get("void_statuses") or [],
             )
             db.add(table)
+            db.flush()
+        elif table.parent_table_code != spec.get("parent_table_code"):
+            # 老库升级：外键关系是基础设施口径，可补齐；其它字段保持用户改动
+            table.parent_table_code = spec.get("parent_table_code")
+            table.parent_key_column = spec.get("parent_key_column")
+            table.parent_status_column = spec.get("parent_status_column") or "status"
+            table.void_statuses = spec.get("void_statuses") or []
             db.flush()
     return db.scalar(select(func.count()).select_from(SourceTable)) or 0
 
@@ -173,6 +184,38 @@ def ensure_runs(db) -> int:
     return db.scalar(select(func.count()).select_from(MergeRun)) or 0
 
 
+def ensure_link_gate(db) -> None:
+    """存量老库升级：用库内事件跑一遍关联门禁，给已有批次补齐门禁指标。
+
+    幂等：只有宽表 / 待关联表都为空（本功能上线前的老库）才重算一次；
+    重算本身也只在状态迁移时写审计。
+    """
+    from src.models.pending_link import PendingLink
+    from src.models.wide_row import WideRow
+    from src.services import link_gate
+
+    links = db.scalar(select(func.count()).select_from(PendingLink)) or 0
+    wide = db.scalar(select(func.count()).select_from(WideRow)) or 0
+    if links or wide:
+        return
+    result = link_gate.recompute_from_events(
+        db,
+        actor_email="system@cdcmerge.io",
+        actor_role="admin",
+        source="seed",
+        layer="seed",
+    )
+    latest = db.scalar(select(MergeRun).order_by(MergeRun.id.desc()).limit(1))
+    if latest is not None:
+        latest.metrics = {**(latest.metrics or {}), "link_gate": result}
+        latest.link_pending_count = result["pending"]
+        latest.link_released_count = result["released"]
+        latest.link_withdrawn_count = result["withdrawn"]
+        latest.wide_published_count = result["wide_published"]
+        latest.wide_withdrawn_count = result["wide_withdrawn"]
+    db.flush()
+
+
 def ensure_audit(db) -> None:
     for seed_key, email, role, action, entity, detail in SEED_AUDIT:
         exists = db.scalar(select(AuditLog).where(AuditLog.seed_key == seed_key))
@@ -198,6 +241,7 @@ def seed_all() -> dict:
         ensure_events(db)
         ensure_schema_changes(db)
         runs = ensure_runs(db)
+        ensure_link_gate(db)
         ensure_audit(db)
         findings = db.scalar(select(func.count()).select_from(SchemaChange)) or 0
         pending = db.scalar(select(func.count()).select_from(SchemaChange).where(SchemaChange.gate_status == "pending")) or 0

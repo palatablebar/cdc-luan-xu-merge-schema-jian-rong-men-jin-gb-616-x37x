@@ -196,3 +196,50 @@ REPLAY_STATUS_LABELS: dict[str, str] = {
     ReplayStatus.REPLAYED.value: "已重放",
     ReplayStatus.SKIPPED.value: "已跳过",
 }
+
+
+class LinkStatus(StrEnum):
+    """跨表关联门禁：从表记录相对父单的状态。"""
+
+    PENDING = "pending"  # 父单未到，保留待关联且不发布
+    RELEASED = "released"  # 父单已到，放行并发布宽表行
+    WITHDRAWN = "withdrawn"  # 父单作废，撤回已发布行
+
+
+LINK_STATUS_LABELS: dict[str, str] = {
+    LinkStatus.PENDING.value: "待关联（未发布）",
+    LinkStatus.RELEASED.value: "已放行（已发布）",
+    LinkStatus.WITHDRAWN.value: "已撤回（父单作废）",
+}
+
+LINK_STATUS_ORDER: list[str] = [
+    LinkStatus.PENDING.value,
+    LinkStatus.RELEASED.value,
+    LinkStatus.WITHDRAWN.value,
+]
+
+
+class LinkReason(StrEnum):
+    PARENT_MISSING = "parent_missing"
+    PARENT_VOID = "parent_void"
+    PARENT_LINKED = "parent_linked"
+    CHILD_DELETED = "child_deleted"
+
+
+LINK_REASON_LABELS: dict[str, str] = {
+    LinkReason.PARENT_MISSING.value: "父单未到达",
+    LinkReason.PARENT_VOID.value: "父单已作废",
+    LinkReason.PARENT_LINKED.value: "父单有效，可关联",
+    LinkReason.CHILD_DELETED.value: "从表已删除",
+}
+
+
+class WideRowStatus(StrEnum):
+    PUBLISHED = "published"
+    WITHDRAWN = "withdrawn"
+
+
+WIDE_ROW_STATUS_LABELS: dict[str, str] = {
+    WideRowStatus.PUBLISHED.value: "已发布",
+    WideRowStatus.WITHDRAWN.value: "已撤回",
+}

@@ -27,6 +27,11 @@ class SourceTable(Base):
     owner: Mapped[str] = mapped_column(String(80), default="衡远保险 · 数据集成组")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 跨表关联门禁：本表为从表时，指向父表的编码 / 外键列 / 父单状态列 / 视为作废的状态值
+    parent_table_code: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    parent_key_column: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    parent_status_column: Mapped[str | None] = mapped_column(String(60), nullable=True, default="status")
+    void_statuses: Mapped[list] = mapped_column(JSON, default=list)
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

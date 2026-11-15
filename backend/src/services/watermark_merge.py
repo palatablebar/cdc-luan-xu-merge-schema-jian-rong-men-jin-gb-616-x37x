@@ -193,6 +193,7 @@ def merge_events(
 
     rows: list[dict] = []
     deleted = 0
+    deleted_pks: list[str] = []
     applied_ops = {"c": 0, "u": 0, "d": 0}
     stale_rejects = 0
 
@@ -256,6 +257,7 @@ def merge_events(
 
         if state is None:
             deleted += 1
+            deleted_pks.append(pk)
         else:
             rows.append(
                 {
@@ -290,6 +292,7 @@ def merge_events(
     )
     return {
         "rows": rows,
+        "deleted_pks": deleted_pks,
         "rejects": rejects,
         "metrics": metrics,
         "watermark": watermark,

@@ -23,6 +23,10 @@ class TableIn(BaseModel):
     owner: str | None = Field(default=None, max_length=80)
     note: str | None = Field(default=None, max_length=2000)
     enabled: bool = True
+    parent_table_code: str | None = Field(default=None, max_length=40)
+    parent_key_column: str | None = Field(default=None, max_length=60)
+    parent_status_column: str | None = Field(default="status", max_length=60)
+    void_statuses: list[str] = Field(default_factory=list, max_length=20)
 
 
 class TablePatch(BaseModel):
@@ -34,3 +38,7 @@ class TablePatch(BaseModel):
     owner: str | None = Field(default=None, max_length=80)
     note: str | None = Field(default=None, max_length=2000)
     enabled: bool | None = None
+    parent_table_code: str | None = Field(default=None, max_length=40)
+    parent_key_column: str | None = Field(default=None, max_length=60)
+    parent_status_column: str | None = Field(default=None, max_length=60)
+    void_statuses: list[str] | None = Field(default=None, max_length=20)

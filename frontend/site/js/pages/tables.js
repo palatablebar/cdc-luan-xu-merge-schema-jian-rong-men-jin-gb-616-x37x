@@ -44,6 +44,9 @@ function openTable(view, ctx, table) {
       ['主键列', `<span class="mono">${esc(table.pk_column)}</span>`],
       ['binlog 位点', `<span class="mono">${esc(table.binlog_file || '—')} : ${esc(table.binlog_position)}</span>`],
       ['允许迟到', `${esc(table.allowed_lateness_seconds)} 秒`],
+      ['父表关联', table.parent_table_code
+        ? `${esc(table.parent_table_code)} · 外键 <span class="mono">${esc(table.parent_key_column || '—')}</span> · 作废状态 ${((table.void_statuses || []).length ? (table.void_statuses || []).map(esc).join(' / ') : '—')} · 等待父单时保留不发布`
+        : '父表（不等待关联）'],
       ['状态', table.enabled ? '<span class="badge ok">订阅中</span>' : '<span class="badge">已暂停</span>'],
       ['事件 / 迟到', `${esc(table.event_count)} / ${esc(table.late_count)}`],
       ['最近事件', fmtTime(table.last_event_at)],
@@ -96,6 +99,10 @@ function openCreate(view, ctx) {
       ${field({ label: '主键列', name: 'pk_column', value: 'id' })}
       ${field({ label: '允许迟到（秒）', name: 'allowed_lateness_seconds', type: 'number', value: '30', attrs: 'min="0" max="3600"' })}
       ${field({ label: 'binlog 文件', name: 'binlog_file', placeholder: 'mysql-bin.000418' })}
+      ${field({ label: '父表编码（留空=父表）', name: 'parent_table_code', placeholder: 'T_POLICY', hint: '从表按外键等待父单，父单未到先保留不发布' })}
+      ${field({ label: '父单外键列', name: 'parent_key_column', placeholder: 'policy_id' })}
+      ${field({ label: '父单状态列', name: 'parent_status_column', value: 'status' })}
+      ${field({ label: '父单作废状态（逗号分隔）', name: 'void_statuses', placeholder: '已退保', hint: '命中即撤回已发布宽表行' })}
       <label class="field"><span>列定义（JSON 数组）</span>
         <textarea name="schema_columns" rows="6" class="mono">[{"name":"id","type":"bigint","nullable":false},{"name":"status","type":"varchar(16)","nullable":true}]</textarea>
       </label>
@@ -123,6 +130,13 @@ function openCreate(view, ctx) {
         allowed_lateness_seconds: Number(form.allowed_lateness_seconds.value || 30),
         binlog_file: form.binlog_file.value.trim() || null,
         schema_columns: columns,
+        parent_table_code: form.parent_table_code.value.trim() || null,
+        parent_key_column: form.parent_key_column.value.trim() || null,
+        parent_status_column: form.parent_status_column.value.trim() || 'status',
+        void_statuses: form.void_statuses.value
+          .split(/[，,]/)
+          .map((item) => item.trim())
+          .filter(Boolean),
       });
       toast(`已登记 ${created.code}`);
       close();
@@ -184,6 +198,14 @@ export const tablesPage = {
             { key: 'late_count', label: '迟到', className: 'num', render: (row) => (row.late_count ? `<span class="warn-text mono">${row.late_count}</span>` : '0') },
             { key: 'last_event_at', label: '最近事件', render: (row) => fmtTime(row.last_event_at) },
             { key: 'enabled', label: '状态', render: (row) => (row.enabled ? '<span class="badge ok">订阅中</span>' : '<span class="badge">已暂停</span>') },
+            {
+              key: 'parent_table_code',
+              label: '关联',
+              render: (row) =>
+                row.parent_table_code
+                  ? `<span class="badge info">从表 → ${esc(row.parent_table_code)}</span><div class="mono muted tiny">${esc(row.parent_key_column || '')}</div>`
+                  : '<span class="badge">父表</span>',
+            },
           ],
         })}
       </section>`;

@@ -30,6 +30,11 @@ def serialize(table: SourceTable, stats: dict | None = None) -> dict:
         "event_count": stats.get("event_count", 0),
         "late_count": stats.get("late_count", 0),
         "reject_count": stats.get("reject_count", 0),
+        "parent_table_code": table.parent_table_code,
+        "parent_key_column": table.parent_key_column,
+        "parent_status_column": table.parent_status_column or "status",
+        "void_statuses": table.void_statuses or [],
+        "is_child_table": bool(table.parent_table_code),
         "last_event_at": iso_utc(table.last_event_at),
         "created_at": iso_utc(table.created_at),
         "updated_at": iso_utc(table.updated_at),
@@ -101,6 +106,10 @@ def create_table(db: Session, payload: dict) -> SourceTable:
         owner=payload.get("owner") or "衡远保险 · 数据集成组",
         note=payload.get("note"),
         enabled=payload.get("enabled", True),
+        parent_table_code=payload.get("parent_table_code"),
+        parent_key_column=payload.get("parent_key_column"),
+        parent_status_column=payload.get("parent_status_column") or "status",
+        void_statuses=payload.get("void_statuses") or [],
     )
     db.add(table)
     db.flush()
@@ -117,6 +126,10 @@ def update_table(db: Session, table: SourceTable, payload: dict) -> SourceTable:
         "owner",
         "note",
         "enabled",
+        "parent_table_code",
+        "parent_key_column",
+        "parent_status_column",
+        "void_statuses",
     ):
         if field in payload and payload[field] is not None:
             setattr(table, field, payload[field])

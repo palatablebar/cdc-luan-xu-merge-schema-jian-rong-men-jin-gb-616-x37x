@@ -43,4 +43,8 @@ def get_run_detail(db: Session, run_id: int) -> dict:
     run = merge_run_service.get_run(db, run_id)
     table = table_service.get_table(db, run.table_id) if run.table_id else None
     rejects = reject_service.list_rejects(db, run_id=run.id, limit=100, offset=0)
-    return {"run": merge_run_service.serialize(run, table), "rejects": rejects}
+    return {
+        "run": merge_run_service.serialize(run, table),
+        "rejects": rejects,
+        **merge_run_service.serialize_detail(db, run),
+    }

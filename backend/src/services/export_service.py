@@ -9,16 +9,21 @@ from src.constants.enums import (
     COMPAT_LABELS,
     GATE_ACTION_LABELS,
     GATE_STATUS_LABELS,
+    LINK_REASON_LABELS,
+    LINK_STATUS_LABELS,
     REJECT_REASON_LABELS,
     REPLAY_STATUS_LABELS,
     RUN_STATUS_LABELS,
     SEVERITY_LABELS,
     TRIGGER_LABELS,
+    WIDE_ROW_STATUS_LABELS,
 )
 from src.models.merge_run import MergeRun
+from src.models.pending_link import PendingLink
 from src.models.reject_row import RejectRow
 from src.models.schema_change import SchemaChange
 from src.models.source_table import SourceTable
+from src.models.wide_row import WideRow
 from src.utils.csv_export import to_csv
 
 
@@ -31,7 +36,8 @@ def merge_runs_csv(db: Session) -> bytes:
     tables = {table.id: table for table in db.scalars(select(SourceTable)).all()}
     headers = [
         "运行号", "范围", "触发", "状态", "允许迟到(s)", "事件数", "upsert行",
-        "删除终态", "迟到数", "迟到率", "重复去重", "拒绝行", "水位线", "操作人", "开始时间", "结束时间",
+        "删除终态", "迟到数", "迟到率", "重复去重", "拒绝行", "待关联", "已放行", "已撤回",
+        "宽表已发布", "宽表已撤回", "水位线", "操作人", "开始时间", "结束时间",
     ]
     rows = []
     for run in runs:
@@ -51,10 +57,77 @@ def merge_runs_csv(db: Session) -> bytes:
                 f"{metrics.get('late_ratio', 0):.4f}",
                 run.dup_skipped,
                 run.rejected_count,
+                run.link_pending_count,
+                run.link_released_count,
+                run.link_withdrawn_count,
+                run.wide_published_count,
+                run.wide_withdrawn_count,
                 _stamp(run.watermark_at),
                 run.operator_email,
                 _stamp(run.started_at),
                 _stamp(run.finished_at),
+            ]
+        )
+    return to_csv(headers, rows)
+
+
+def link_rows_csv(db: Session, status: str | None = None) -> bytes:
+    """待关联 / 放行 / 撤回清单导出：数量、放行依据、父单快照都可核对。"""
+    stmt = select(PendingLink)
+    if status:
+        stmt = stmt.where(PendingLink.status == status)
+    links = db.scalars(stmt.order_by(PendingLink.id)).all()
+    tables = {table.id: table for table in db.scalars(select(SourceTable)).all()}
+    headers = [
+        "记录号", "从表", "主键", "父表", "外键值", "关联状态", "判定原因", "事件时间",
+        "放行批次", "放行依据", "撤回依据", "首次保留批次", "最近更新",
+    ]
+    rows = [
+        [
+            link.id,
+            tables.get(link.table_id).code if tables.get(link.table_id) else "",
+            link.pk_value,
+            link.parent_table_code or "",
+            link.parent_pk or "",
+            LINK_STATUS_LABELS.get(link.status, link.status),
+            LINK_REASON_LABELS.get(link.reason, link.reason),
+            _stamp(link.event_time),
+            link.released_run_id or "",
+            link.release_basis or "",
+            link.withdraw_basis or "",
+            link.first_seen_run_id or "",
+            _stamp(link.updated_at),
+        ]
+        for link in links
+    ]
+    return to_csv(headers, rows)
+
+
+def wide_rows_csv(db: Session, status: str | None = None) -> bytes:
+    stmt = select(WideRow)
+    if status:
+        stmt = stmt.where(WideRow.status == status)
+    wide_rows = db.scalars(stmt.order_by(WideRow.parent_pk)).all()
+    tables = {table.id: table for table in db.scalars(select(SourceTable)).all()}
+    headers = ["父表", "父单主键", "父单状态列值", "宽表状态", "关联依据", "子表", "子记录行数", "子记录主键", "来源批次", "发布时间"]
+    rows = []
+    for wide in wide_rows:
+        table = tables.get(wide.parent_table_id) if wide.parent_table_id else None
+        status_column = (table.parent_status_column if table else None) or "status"
+        rows.append(
+            [
+                wide.parent_table_code,
+                wide.parent_pk,
+                (wide.parent_row or {}).get(status_column, ""),
+                WIDE_ROW_STATUS_LABELS.get(wide.status, wide.status),
+                wide.link_basis,
+                ",".join(
+                    sorted({str(child.get("child_code")) for child in (wide.child_rows or []) if child.get("child_code")})
+                ),
+                len(wide.child_rows or []),
+                ",".join(str(child.get("pk_value")) for child in (wide.child_rows or [])),
+                wide.source_run_id or "",
+                _stamp(wide.published_at),
             ]
         )
     return to_csv(headers, rows)

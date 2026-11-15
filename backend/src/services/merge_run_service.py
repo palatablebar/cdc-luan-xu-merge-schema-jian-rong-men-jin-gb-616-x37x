@@ -1,4 +1,4 @@
-"""合并批次服务：装载事件 -> 调用算法 A -> 落指标与拒绝行。"""
+"""合并批次服务：装载事件 -> 调用算法 A -> 跨表关联门禁 -> 落指标与拒绝行。"""
 from __future__ import annotations
 
 from datetime import timedelta
@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 from src.constants.enums import REJECT_REASON_LABELS
 from src.models.cdc_event import CdcEvent
 from src.models.merge_run import MergeRun
+from src.models.pending_link import PendingLink
 from src.models.reject_row import RejectRow
 from src.models.source_table import SourceTable
-from src.services import watermark_merge
+from src.models.wide_row import WideRow
+from src.services import link_gate, watermark_merge
 from src.utils.errors import AppError
 from src.utils.timeutil import iso_utc, local_now, utcnow
 
@@ -36,6 +38,12 @@ def serialize(run: MergeRun, table: SourceTable | None = None) -> dict:
         "late_ratio": metrics.get("late_ratio", 0.0),
         "dup_skipped": run.dup_skipped,
         "rejected_count": run.rejected_count,
+        "link_pending_count": run.link_pending_count,
+        "link_released_count": run.link_released_count,
+        "link_withdrawn_count": run.link_withdrawn_count,
+        "wide_published_count": run.wide_published_count,
+        "wide_withdrawn_count": run.wide_withdrawn_count,
+        "link_gate": metrics.get("link_gate") or {},
         "watermark_at": iso_utc(run.watermark_at),
         "metrics": metrics,
         "log_text": run.log_text,
@@ -118,6 +126,8 @@ def execute(db: Session, run: MergeRun, *, table_id: int | None) -> MergeRun:
     per_table: dict[str, dict] = {}
     all_rejects: list[dict] = []
     samples: list[dict] = []
+    folded_by_table: dict[int, list[dict]] = {}
+    deleted_by_table: dict[int, list[str]] = {}
     for tid in sorted(grouped):
         table = tables.get(tid)
         result = watermark_merge.merge_events(
@@ -127,6 +137,8 @@ def execute(db: Session, run: MergeRun, *, table_id: int | None) -> MergeRun:
             watermark=watermark,
         )
         metrics = result["metrics"]
+        folded_by_table[tid] = result["rows"]
+        deleted_by_table[tid] = result["deleted_pks"]
         for key in ("upsert_rows", "deletes", "late_count", "dup_skipped", "rejected"):
             totals[key] += int(metrics.get(key) or 0)
         for op_key in ("c", "u", "d"):
@@ -158,6 +170,23 @@ def execute(db: Session, run: MergeRun, *, table_id: int | None) -> MergeRun:
             )
 
     events_in = len(events)
+    # 跨表关联门禁：父单未到的从表折叠行不进宽表，先保留待关联；
+    # 父单已到/作废的存量记录在同一事务内自动放行/撤回。
+    link_summary = link_gate.reconcile(
+        db,
+        folded_by_table=folded_by_table,
+        deleted_by_table=deleted_by_table,
+        scope_tables=set(grouped) | set(folded_by_table),
+        run=run,
+        actor_email=run.operator_email,
+        actor_role="admin",
+        source="merge",
+    )
+    for code, batch in (link_summary.get("batch") or {}).items():
+        if code in per_table:
+            held = int(batch.get("held") or 0)
+            per_table[code]["held_rows"] = held
+            per_table[code]["published_rows"] = max(0, int(per_table[code]["upsert_rows"]) - held)
     metrics = {
         "events_in": events_in,
         "upsert_rows": totals["upsert_rows"],
@@ -176,6 +205,19 @@ def execute(db: Session, run: MergeRun, *, table_id: int | None) -> MergeRun:
             reason: sum(1 for item in all_rejects if item["reason"] == reason)
             for reason in sorted({item["reason"] for item in all_rejects})
         },
+        "link_gate": {
+            "source": link_summary.get("source", "merge"),
+            "pending": link_summary.get("pending", 0),
+            "released": link_summary.get("released", 0),
+            "withdrawn": link_summary.get("withdrawn", 0),
+            "wide_published": link_summary.get("wide_published", 0),
+            "wide_withdrawn": link_summary.get("wide_withdrawn", 0),
+            "per_child": link_summary.get("per_child", {}),
+            "batch": link_summary.get("batch", {}),
+            "pending_delta": link_summary.get("pending_delta", 0),
+            "released_delta": link_summary.get("released_delta", 0),
+            "transitions": link_summary.get("transitions", 0),
+        },
     }
     _persist_rejects(db, run, all_rejects)
 
@@ -186,6 +228,11 @@ def execute(db: Session, run: MergeRun, *, table_id: int | None) -> MergeRun:
     run.late_count = totals["late_count"]
     run.dup_skipped = totals["dup_skipped"]
     run.rejected_count = totals["rejected"]
+    run.link_pending_count = link_summary.get("pending", 0)
+    run.link_released_count = link_summary.get("released", 0)
+    run.link_withdrawn_count = link_summary.get("withdrawn", 0)
+    run.wide_published_count = link_summary.get("wide_published", 0)
+    run.wide_withdrawn_count = link_summary.get("wide_withdrawn", 0)
     run.watermark_at = watermark
     run.status = "success" if events_in else "partial"
     reason_text = "、".join(
@@ -197,6 +244,9 @@ def execute(db: Session, run: MergeRun, *, table_id: int | None) -> MergeRun:
         f"迟到 {totals['late_count']} 条、重复 {totals['dup_skipped']} 条、拒绝 {totals['rejected']} 条"
         + (f"（{reason_text}）" if reason_text else "")
         + f"；折叠 {totals['upsert_rows']} 行 upsert、{totals['deletes']} 个删除终态"
+        + f"；关联门禁 待关联 {run.link_pending_count} / 已放行 {run.link_released_count}"
+        f" / 已撤回 {run.link_withdrawn_count}，宽表 发布 {run.wide_published_count}"
+        f" / 撤回 {run.wide_withdrawn_count}"
     )
     run.finished_at = utcnow()
     db.flush()
@@ -272,3 +322,47 @@ def get_run(db: Session, run_id: int) -> MergeRun:
     if run is None:
         raise AppError("NOT_FOUND", 404, {"entity": "merge_run", "id": run_id})
     return run
+
+
+def serialize_detail(db: Session, run: MergeRun) -> dict:
+    """批次详情里附上门禁样本：本批次保留 / 放行 / 撤回的关联记录，页面可核对。"""
+    tables = {table.id: table for table in db.scalars(select(SourceTable)).all()}
+    metrics = run.metrics or {}
+    gate_meta = metrics.get("link_gate") or {}
+    link_rows: dict[str, list] = {"pending": [], "released": [], "withdrawn": []}
+    for status in link_rows:
+        rows = db.scalars(
+            select(PendingLink)
+            .where(PendingLink.status == status)
+            .order_by(PendingLink.updated_at.desc(), PendingLink.id.desc())
+            .limit(20)
+        ).all()
+        link_rows[status] = [link_gate.serialize_link(row, tables) for row in rows]
+    wide_rows = db.scalars(select(WideRow).order_by(WideRow.updated_at.desc(), WideRow.id.desc()).limit(20)).all()
+    return {
+        "link_gate": {
+            **gate_meta,
+            "pending_now": db.scalar(
+                select(func.count()).select_from(PendingLink).where(PendingLink.status == "pending")
+            )
+            or 0,
+            "released_now": db.scalar(
+                select(func.count()).select_from(PendingLink).where(PendingLink.status == "released")
+            )
+            or 0,
+            "withdrawn_now": db.scalar(
+                select(func.count()).select_from(PendingLink).where(PendingLink.status == "withdrawn")
+            )
+            or 0,
+            "wide_published_now": db.scalar(
+                select(func.count()).select_from(WideRow).where(WideRow.status == "published")
+            )
+            or 0,
+            "wide_withdrawn_now": db.scalar(
+                select(func.count()).select_from(WideRow).where(WideRow.status == "withdrawn")
+            )
+            or 0,
+        },
+        "links": link_rows,
+        "wide_rows": [link_gate.serialize_wide(row, tables) for row in wide_rows],
+    }

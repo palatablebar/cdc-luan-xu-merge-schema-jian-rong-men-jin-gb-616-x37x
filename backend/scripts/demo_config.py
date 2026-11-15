@@ -74,6 +74,11 @@ TABLES = [
         "delete_pks": [100, 101, 102],
         "stale_pks": [100, 101],
         "acceptance_pair": True,
+        # 跨表关联门禁：保单是父表；「已退保」视为作废，其名下理赔 / 收缴不进宽表
+        "parent_table_code": None,
+        "parent_key_column": None,
+        "parent_status_column": "status",
+        "void_statuses": ["已退保"],
     },
     {
         "code": "T_CLAIM",
@@ -96,6 +101,12 @@ TABLES = [
         "delete_pks": [100, 101, 102],
         "stale_pks": [100],
         "acceptance_pair": False,
+        # 从表：按数字外键 policy_id 关联保单；父单未到 -> 保留待关联、不发布
+        "parent_table_code": "T_POLICY",
+        "parent_key_column": "policy_id",
+        "parent_status_column": "status",
+        "void_statuses": ["已退保"],
+        "orphan_claims": 6,
     },
     {
         "code": "T_PREMIUM",
@@ -118,6 +129,11 @@ TABLES = [
         "delete_pks": [100, 101],
         "stale_pks": [100],
         "acceptance_pair": False,
+        # 从表：按业务单号 policy_no 关联保单（父单主键带 POL- 前缀）
+        "parent_table_code": "T_POLICY",
+        "parent_key_column": "policy_no",
+        "parent_status_column": "status",
+        "void_statuses": ["已退保"],
     },
 ]
 
@@ -221,7 +237,8 @@ def _after_row(spec: dict, n: int, tier: int) -> dict:
         return {
             "claim_id": pk,
             "claim_no": f"{spec['pk_prefix']}-{pk}",
-            "policy_id": 100000 + n,
+            # 第 100~105 个主键指向不存在的保单（编号越过父表 250 个主键），制造「父单未到」
+            "policy_id": 100000 + (n if n < 100 else (306 if n < 106 else n)),
             "claim_amount": (n * 137) % 90000 + 500,
             "status": status,
             "reported_at": _fmt_dt(base + timedelta(minutes=n % 600)),

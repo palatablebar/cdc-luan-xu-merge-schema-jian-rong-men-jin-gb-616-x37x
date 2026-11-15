@@ -20,9 +20,11 @@ from src.constants.enums import (
 from src.models.audit import AuditLog
 from src.models.cdc_event import CdcEvent
 from src.models.merge_run import MergeRun
+from src.models.pending_link import PendingLink
 from src.models.reject_row import RejectRow
 from src.models.schema_change import SchemaChange
 from src.models.source_table import SourceTable
+from src.models.wide_row import WideRow
 from src.utils.timeutil import iso_utc, local_now, utcnow
 
 from src.constants.log_templates import ACTIONS
@@ -58,6 +60,11 @@ def overview(db: Session) -> dict:
     gate_total = db.scalar(select(func.count()).select_from(SchemaChange)) or 0
     gate_pending = db.scalar(select(func.count()).select_from(SchemaChange).where(SchemaChange.gate_status == "pending")) or 0
     gate_breaking = db.scalar(select(func.count()).select_from(SchemaChange).where(SchemaChange.compat == "breaking")) or 0
+    link_pending = db.scalar(select(func.count()).select_from(PendingLink).where(PendingLink.status == "pending")) or 0
+    link_released = db.scalar(select(func.count()).select_from(PendingLink).where(PendingLink.status == "released")) or 0
+    link_withdrawn = db.scalar(select(func.count()).select_from(PendingLink).where(PendingLink.status == "withdrawn")) or 0
+    wide_published = db.scalar(select(func.count()).select_from(WideRow).where(WideRow.status == "published")) or 0
+    wide_withdrawn = db.scalar(select(func.count()).select_from(WideRow).where(WideRow.status == "withdrawn")) or 0
 
     latest_run = db.scalar(select(MergeRun).order_by(MergeRun.id.desc()).limit(1))
     tables = db.scalars(select(SourceTable).order_by(SourceTable.id)).all()
@@ -119,6 +126,11 @@ def overview(db: Session) -> dict:
         "gate_total": gate_total,
         "gate_pending": gate_pending,
         "gate_breaking": gate_breaking,
+        "link_pending": link_pending,
+        "link_released": link_released,
+        "link_withdrawn": link_withdrawn,
+        "wide_published": wide_published,
+        "wide_withdrawn": wide_withdrawn,
         "worker_alive": worker_alive(),
         "latest_run": {
             "id": latest_run.id,

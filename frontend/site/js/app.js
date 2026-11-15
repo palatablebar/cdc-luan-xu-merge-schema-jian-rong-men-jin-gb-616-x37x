@@ -8,6 +8,7 @@ import tablesPage from './pages/tables.js';
 import eventsPage from './pages/events.js';
 import runsPage from './pages/runs.js';
 import schemaPage from './pages/schema.js';
+import linkPage from './pages/link.js';
 
 const routes = [
   { path: '#/overview', page: overviewPage, permission: 'overview:read' },
@@ -15,6 +16,7 @@ const routes = [
   { path: '#/events', page: eventsPage, permission: 'event:read' },
   { path: '#/runs', page: runsPage, permission: 'run:read' },
   { path: '#/schema', page: schemaPage, permission: 'schema:read' },
+  { path: '#/link', page: linkPage, permission: 'link:read' },
 ];
 
 let currentUser = null;

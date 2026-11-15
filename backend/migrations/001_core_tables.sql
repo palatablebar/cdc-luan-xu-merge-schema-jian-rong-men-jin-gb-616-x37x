@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS source_tables (
   owner VARCHAR(80) NOT NULL,
   note TEXT,
   enabled TINYINT(1) NOT NULL DEFAULT 1,
+  parent_table_code VARCHAR(40) NULL,
+  parent_key_column VARCHAR(60) NULL,
+  parent_status_column VARCHAR(60) NULL DEFAULT 'status',
+  void_statuses JSON NOT NULL,
   last_event_at DATETIME,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
@@ -64,6 +68,11 @@ CREATE TABLE IF NOT EXISTS merge_runs (
   late_count INT NOT NULL DEFAULT 0,
   dup_skipped INT NOT NULL DEFAULT 0,
   rejected_count INT NOT NULL DEFAULT 0,
+  link_pending_count INT NOT NULL DEFAULT 0,
+  link_released_count INT NOT NULL DEFAULT 0,
+  link_withdrawn_count INT NOT NULL DEFAULT 0,
+  wide_published_count INT NOT NULL DEFAULT 0,
+  wide_withdrawn_count INT NOT NULL DEFAULT 0,
   watermark_at DATETIME,
   metrics JSON NOT NULL,
   log_text TEXT,
@@ -110,6 +119,53 @@ CREATE TABLE IF NOT EXISTS schema_changes (
   detected_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS pending_links (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  table_id INT NOT NULL,
+  pk_value VARCHAR(80) NOT NULL,
+  event_lsn INT NOT NULL DEFAULT 0,
+  event_time DATETIME,
+  op VARCHAR(4) NOT NULL DEFAULT 'u',
+  parent_table_id INT NULL,
+  parent_table_code VARCHAR(40) NULL,
+  parent_pk VARCHAR(80) NULL,
+  parent_key_column VARCHAR(60) NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  reason VARCHAR(28) NOT NULL DEFAULT 'parent_missing',
+  payload JSON NOT NULL,
+  parent_snapshot JSON NOT NULL,
+  first_seen_run_id INT NULL,
+  released_run_id INT NULL,
+  release_basis TEXT,
+  withdraw_basis TEXT,
+  released_at DATETIME,
+  withdrawn_at DATETIME,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT uq_pending_links_table_pk UNIQUE (table_id, pk_value),
+  KEY ix_pending_links_status (status),
+  KEY ix_pending_links_parent (parent_table_code, parent_pk),
+  KEY ix_pending_links_reason (reason)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS wide_rows (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  parent_table_code VARCHAR(40) NOT NULL,
+  parent_pk VARCHAR(80) NOT NULL,
+  parent_table_id INT NULL,
+  child_table_id INT NULL,
+  child_rows JSON NOT NULL,
+  parent_row JSON NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'published',
+  source_run_id INT NULL,
+  link_basis VARCHAR(12) NOT NULL DEFAULT 'linked',
+  metric JSON NOT NULL,
+  published_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  CONSTRAINT uq_wide_rows_parent UNIQUE (parent_table_code, parent_pk),
+  KEY ix_wide_rows_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

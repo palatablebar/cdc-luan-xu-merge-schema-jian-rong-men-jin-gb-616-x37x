@@ -6,6 +6,7 @@ from src.routes.auth import router as auth_router
 from src.routes.events import router as events_router
 from src.routes.exports import router as exports_router
 from src.routes.health import router as health_router
+from src.routes.link_gate import router as link_gate_router
 from src.routes.overview import router as overview_router
 from src.routes.rejects import router as rejects_router
 from src.routes.runs import router as runs_router
@@ -20,6 +21,7 @@ api_router.include_router(tables_router)
 api_router.include_router(events_router)
 api_router.include_router(runs_router)
 api_router.include_router(rejects_router)
+api_router.include_router(link_gate_router)
 api_router.include_router(schema_changes_router)
 api_router.include_router(exports_router)
 api_router.include_router(audit_router)
